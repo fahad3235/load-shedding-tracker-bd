@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Load Shedding Tracker BD</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f4f6f8;color:#1a1a1a}
+header{background:#1f2937;color:#fff;padding:16px}
+header h1{margin:0;font-size:22px}
+header p{margin:4px 0 0;opacity:.8;font-size:13px}
+.topbar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+button{cursor:pointer}
+.btn{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:9px 14px;font-size:14px}
+.btn.secondary{background:#e5e7eb;color:#1a1a1a}
+.btn.danger{background:#dc2626;color:#fff}
+.btn.small{padding:6px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+#langBtn{background:#fff;color:#1f2937;border:0;border-radius:8px;padding:8px 12px;font-size:14px}
+main{max-width:720px;margin:0 auto;padding:12px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tab{border:0;background:#e5e7eb;border-radius:999px;padding:8px 14px;font-size:14px}
+.tab.active{background:#2563eb;color:#fff}
+.panel{background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.panel h2{margin:0 0 8px;font-size:18px}
+.sub{color:#555;font-size:13px;margin:0 0 10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+label{font-size:13px;color:#333;display:block;margin-bottom:2px}
+input,select{width:100%;padding:9px;border:1px solid #ccc;border-radius:8px;font-size:15px;background:#fff}
+.field{flex:1 1 140px;margin-bottom:8px}
+.err{color:#dc2626;font-size:13px;min-height:18px;margin:4px 0}
+.status-card{text-align:center;padding:24px 12px;border-radius:12px;margin-bottom:12px}
+.status-card.on{background:#dcfce7;border:2px solid #16a34a}
+.status-card.off{background:#fee2e2;border:2px solid #dc2626}
+.status-card h2{font-size:34px;margin:0}
+.status-card p{margin:8px 0 0;font-size:16px}
+.chip{display:inline-block;background:#e0e7ff;border-radius:999px;padding:4px 10px;font-size:13px;margin:2px}
+.chip.off{background:#fee2e2}
+.chip.past{opacity:.55}
+.chip.ongoing{background:#fde68a;font-weight:700}
+.daychip{border:1px solid #ccc;background:#fff;border-radius:999px;padding:7px 12px;font-size:13px}
+.daychip.active{background:#1f2937;color:#fff;border-color:#1f2937}
+.item{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid #eee;padding:10px 0}
+.item:first-child{border-top:0}
+.item .meta{font-size:13px;color:#555}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat{background:#f8fafc;border-radius:10px;padding:12px}
+.stat .v{font-size:22px;font-weight:700}
+.stat .k{font-size:12px;color:#555}
+.grid-week{display:grid;grid-template-columns:1fr;gap:8px}
+.grid-day{border:1px solid #eee;border-radius:10px;padding:10px}
+.grid-day b{display:block;margin-bottom:4px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1f2937;color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:92vw;text-align:center}
+#toast.show{opacity:1}
+footer{text-align:center;color:#777;font-size:12px;padding:16px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div class="topbar">
+    <div>
+      <h1 id="h-title"></h1>
+      <p id="h-sub"></p>
+    </div>
+    <button id="langBtn"></button>
+  </div>
+</header>
+<main>
+  <div class="panel">
+    <div class="row">
+      <div class="field" style="flex:2 1 200px">
+        <label id="l-area" for="areaSelect"></label>
+        <select id="areaSelect"></select>
+      </div>
+      <button class="btn secondary" id="btnAddArea"></button>
+      <button class="btn danger" id="btnDelArea"></button>
+    </div>
+    <div id="areaForm" hidden>
+      <div class="field">
+        <label id="l-area-name" for="f-area-name"></label>
+        <input id="f-area-name" type="text" maxlength="60" autocomplete="off">
+      </div>
+      <p class="err" id="areaErr"></p>
+      <div class="row">
+        <button class="btn" id="btnSaveArea"></button>
+        <button class="btn secondary" id="btnCancelArea"></button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="tabs">
+    <button class="tab active" id="tabStatus"></button>
+    <button class="tab" id="tabSchedule"></button>
+    <button class="tab" id="tabLog"></button>
+    <button class="tab" id="tabTools"></button>
+  </nav>
+
+  <section id="view-status">
+    <div class="status-card on" id="statusCard">
+      <h2 id="statusBadge"></h2>
+      <p id="statusSub"></p>
+    </div>
+    <div class="panel">
+      <h2 id="todayH"></h2>
+      <div id="todayList"></div>
+    </div>
+  </section>
+
+  <section id="view-schedule" hidden>
+    <div class="panel">
+      <h2 id="schedH"></h2>
+      <div class="row" id="dayChips" style="margin-bottom:8px"></div>
+      <div id="winList"></div>
+      <div class="row">
+        <div class="field"><label id="l-win-start" for="f-win-start"></label><input id="f-win-start" type="time"></div>
+        <div class="field"><label id="l-win-end" for="f-win-end"></label><input id="f-win-end" type="time"></div>
+      </div>
+      <p class="err" id="winErr"></p>
+      <button class="btn" id="btnSaveWindow"></button>
+    </div>
+    <div class="panel">
+      <h2 id="weeklyH"></h2>
+      <div class="grid-week" id="weeklyGrid"></div>
+    </div>
+  </section>
+
+  <section id="view-log" hidden>
+    <div class="statgrid">
+      <div class="stat"><div class="k" id="k-today"></div><div class="v" id="v-today"></div></div>
+      <div class="stat"><div class="k" id="k-week"></div><div class="v" id="v-week"></div></div>
+    </div>
+    <p class="sub" id="weekRange"></p>
+    <div class="panel">
+      <h2 id="logH"></h2>
+      <div class="row">
+        <div class="field"><label id="l-log-date" for="f-log-date"></label><input id="f-log-date" type="date"></div>
+        <div class="field"><label id="l-log-start" for="f-log-start"></label><input id="f-log-start" type="time"></div>
+        <div class="field"><label id="l-log-end" for="f-log-end"></label><input id="f-log-end" type="time"></div>
+      </div>
+      <div class="field"><label id="l-log-note" for="f-log-note"></label><input id="f-log-note" type="text" maxlength="120" autocomplete="off"></div>
+      <p class="err" id="logErr"></p>
+      <button class="btn" id="btnSaveLog"></button>
+      <div id="logList" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <section id="view-tools" hidden>
+    <div class="panel">
+      <h2 id="toolsH"></h2>
+      <p class="sub" id="toolsSub"></p>
+      <div class="row">
+        <button class="btn" id="btnExport"></button>
+        <button class="btn" id="btnImport"></button>
+        <button class="btn danger" id="btnClear"></button>
+      </div>
+    </div>
+  </section>
+</main>
+<footer id="f-disclaimer"></footer>
+<div id="toast"></div>
+<input type="file" id="fileImport" accept="application/json,.json" hidden>
+<script src="logic.js"></script>
+<script>
+(function(){
+'use strict';
+const FT = LoadShed;
+const qs = function(s){ return document.querySelector(s); };
+function t(k, vars){ return FT.tr(lang, k, vars); }
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+let lang = 'en';
+try { lang = localStorage.getItem(FT.LANG_KEY) || 'en'; } catch(e){}
+if (lang !== 'bn') lang = 'en';
+
+const params = new URLSearchParams(location.search);
+const asof = (params.get('asof') && FT.isDate(params.get('asof'))) ? params.get('asof') : FT.todayISO();
+const timeParam = params.get('time');
+let areas = [], windows = [], log = [];
+try {
+  const raw = JSON.parse(localStorage.getItem(FT.STORAGE_KEY) || 'null');
+  if (raw && Array.isArray(raw.areas)) { areas = raw.areas; windows = raw.windows || []; log = raw.log || []; }
+} catch(e){}
+let selAreaId = areas.length ? areas[0].id : null;
+let schedDay = FT.weekdayOf(asof);
+let toastTimer = null;
+
+function save(){
+  try { localStorage.setItem(FT.STORAGE_KEY, JSON.stringify({ areas: areas, windows: windows, log: log })); } catch(e){}
+}
+function toast(msg){
+  const el = qs('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ el.classList.remove('show'); }, 2600);
+}
+function nowParts(){
+  // Deterministic "now" for tests: asof date + ?time= override; else real clock.
+  let mins;
+  if (timeParam && FT.isTime(timeParam)) mins = FT.toMinutes(timeParam);
+  else { const d = new Date(); mins = d.getHours() * 60 + d.getMinutes(); }
+  return { weekday: FT.weekdayOf(asof), mins: mins };
+}
+function setTab(name){
+  ['status','schedule','log','tools'].forEach(function(n){
+    qs('#view-' + n).hidden = (n !== name);
+    qs('#tab' + n.charAt(0).toUpperCase() + n.slice(1)).classList.toggle('active', n === name);
+  });
+}
+function selectedArea(){ return areas.filter(function(a){ return a.id === selAreaId; })[0] || null; }
+
+function renderAreas(){
+  const sel = qs('#areaSelect');
+  sel.innerHTML = '';
+  areas.forEach(function(a){
+    const o = document.createElement('option');
+    o.value = a.id; o.textContent = a.name;
+    if (a.id === selAreaId) o.selected = true;
+    sel.appendChild(o);
+  });
+  qs('#btnDelArea').disabled = !selAreaId;
+  qs('#btnSaveWindow').disabled = !selAreaId;
+  qs('#btnSaveLog').disabled = !selAreaId;
+}
+function renderStatus(){
+  const area = selectedArea();
+  const card = qs('#statusCard'), badge = qs('#statusBadge'), sub = qs('#statusSub');
+  const todayEl = qs('#todayList');
+  if (!area) {
+    card.className = 'status-card on';
+    badge.textContent = '';
+    sub.textContent = t('noAreas');
+    todayEl.innerHTML = '<p class="sub">' + esc(t('selectAreaHint')) + '</p>';
+    return;
+  }
+  const now = nowParts();
+  const st = FT.statusAtArea(windows, area.id, now.weekday, now.mins);
+  card.className = 'status-card ' + (st.off ? 'off' : 'on');
+  badge.textContent = st.off ? t('powerOff') : t('powerOn');
+  if (st.off) sub.textContent = t('outageNow') + ' - ' + t('nextOnIn', { n: FT.fmtDuration(FT.minutesUntilNext(st, now.mins), lang) });
+  else if (st.next) sub.textContent = t('nextOffIn', { n: FT.fmtDuration(FT.minutesUntilNext(st, now.mins), lang) });
+  else sub.textContent = t('noSchedule');
+  const todays = FT.windowsFor(windows, area.id, now.weekday);
+  if (!todays.length) todayEl.innerHTML = '<p class="sub">' + esc(t('noWindowsToday')) + '</p>';
+  else todayEl.innerHTML = todays.map(function(w){
+    const st2 = FT.windowDayStatus(w, now.mins);
+    const cls = st2 === 'ongoing' ? 'chip ongoing' : (st2 === 'past' ? 'chip past' : 'chip');
+    return '<span class="' + cls + '">' + esc(FT.fmtTime(w.start, lang)) + ' - ' + esc(FT.fmtTime(w.end, lang)) + ' (' + esc(t('status' + st2.charAt(0).toUpperCase() + st2.slice(1))) + ')</span>';
+  }).join(' ');
+}
+function renderSchedule(){
+  const area = selectedArea();
+  const chips = qs('#dayChips');
+  chips.innerHTML = '';
+  FT.DISPLAY_WEEKDAYS.forEach(function(wd){
+    const b = document.createElement('button');
+    b.className = 'daychip' + (wd === schedDay ? ' active' : '');
+    b.textContent = FT.fmtWeekday(wd, lang);
+    b.onclick = function(){ schedDay = wd; renderSchedule(); };
+    chips.appendChild(b);
+  });
+  const list = qs('#winList');
+  if (!area) { list.innerHTML = '<p class="sub">' + esc(t('noAreas')) + '</p>'; qs('#weeklyGrid').innerHTML = ''; return; }
+  const dayWins = FT.windowsFor(windows, area.id, schedDay);
+  if (!dayWins.length) list.innerHTML = '<p class="sub">' + esc(t('noWindows')) + '</p>';
+  else list.innerHTML = dayWins.map(function(w){
+    return '<div class="item"><span>' + esc(FT.fmtTime(w.start, lang)) + ' - ' + esc(FT.fmtTime(w.end, lang)) +
+      ' <span class="meta">(' + esc(FT.fmtDuration(FT.toMinutes(w.end) - FT.toMinutes(w.start), lang)) + ')</span></span>' +
+      '<button class="btn danger small" data-delwin="' + w.id + '">' + esc(t('del')) + '</button></div>';
+  }).join('');
+  list.querySelectorAll('[data-delwin]').forEach(function(b){
+    b.onclick = function(){
+      if (!confirm(t('confirmDelWindow'))) return;
+      windows = windows.filter(function(w){ return w.id !== b.getAttribute('data-delwin'); });
+      save(); renderAll(); toast(t('deleted'));
+    };
+  });
+  qs('#weeklyGrid').innerHTML = FT.DISPLAY_WEEKDAYS.map(function(wd){
+    const ws = FT.windowsFor(windows, area.id, wd);
+    const chipsHtml = ws.length ? ws.map(function(w){
+      return '<span class="chip">' + esc(FT.fmtTime(w.start, lang)) + '-' + esc(FT.fmtTime(w.end, lang)) + '</span>';
+    }).join(' ') : '<span class="sub">' + esc(t('noWindows')) + '</span>';
+    return '<div class="grid-day"><b>' + esc(FT.fmtWeekday(wd, lang)) + '</b>' + chipsHtml + '</div>';
+  }).join('');
+}
+function renderLog(){
+  const area = selectedArea();
+  const tot = area ? FT.logTotals(log, area.id, asof) : { todayMin: 0, weekMin: 0 };
+  qs('#v-today').textContent = FT.fmtDuration(tot.todayMin, lang);
+  qs('#v-week').textContent = FT.fmtDuration(tot.weekMin, lang);
+  qs('#weekRange').textContent = t('weekRange', { a: FT.fmtDate(tot.weekStart || asof, lang), b: FT.fmtDate(tot.weekEnd || asof, lang) });
+  const list = qs('#logList');
+  if (!area) { list.innerHTML = '<p class="sub">' + esc(t('noAreas')) + '</p>'; return; }
+  const entries = FT.logsFor(log, area.id);
+  if (!entries.length) list.innerHTML = '<p class="sub">' + esc(t('noLog')) + '</p>';
+  else list.innerHTML = entries.map(function(e){
+    return '<div class="item"><span><b>' + esc(FT.fmtDate(e.date, lang)) + '</b> ' +
+      esc(FT.fmtTime(e.start, lang)) + ' - ' + esc(FT.fmtTime(e.end, lang)) +
+      ' <span class="meta">(' + esc(FT.fmtDuration(FT.toMinutes(e.end) - FT.toMinutes(e.start), lang)) + ')' +
+      (e.note ? ' - ' + esc(e.note) : '') + '</span></span>' +
+      '<button class="btn danger small" data-dellog="' + e.id + '">' + esc(t('del')) + '</button></div>';
+  }).join('');
+  list.querySelectorAll('[data-dellog]').forEach(function(b){
+    b.onclick = function(){
+      if (!confirm(t('confirmDelLog'))) return;
+      log = log.filter(function(e){ return e.id !== b.getAttribute('data-dellog'); });
+      save(); renderAll(); toast(t('deleted'));
+    };
+  });
+}
+function renderAll(){ renderAreas(); renderStatus(); renderSchedule(); renderLog(); }
+function applyLang(){
+  document.documentElement.lang = lang;
+  qs('#langBtn').textContent = lang === 'en' ? '\u09ac\u09be\u0982\u09b2\u09be' : 'English';
+  qs('#h-title').textContent = t('appTitle');
+  qs('#h-sub').textContent = t('appSub');
+  qs('#tabStatus').textContent = t('tabStatus');
+  qs('#tabSchedule').textContent = t('tabSchedule');
+  qs('#tabLog').textContent = t('tabLog');
+  qs('#tabTools').textContent = t('tabTools');
+  qs('#l-area').textContent = t('areasLabel');
+  qs('#btnAddArea').textContent = t('addArea');
+  qs('#btnDelArea').textContent = t('deleteArea');
+  qs('#l-area-name').textContent = t('areaName');
+  qs('#btnSaveArea').textContent = t('save');
+  qs('#btnCancelArea').textContent = t('cancel');
+  qs('#todayH').textContent = t('todayTitle');
+  qs('#schedH').textContent = t('addWindow');
+  qs('#weeklyH').textContent = t('weeklyTitle');
+  qs('#l-win-start').textContent = t('startLabel');
+  qs('#l-win-end').textContent = t('endLabel');
+  qs('#btnSaveWindow').textContent = t('addWindow');
+  qs('#logH').textContent = t('logOutage');
+  qs('#k-today').textContent = t('totalToday');
+  qs('#k-week').textContent = t('totalWeek');
+  qs('#l-log-date').textContent = t('dateLabel');
+  qs('#l-log-start').textContent = t('startLabel');
+  qs('#l-log-end').textContent = t('endLabel');
+  qs('#l-log-note').textContent = t('noteLabel');
+  qs('#btnSaveLog').textContent = t('logOutage');
+  qs('#toolsH').textContent = t('toolsTitle');
+  qs('#toolsSub').textContent = t('toolsSub');
+  qs('#btnExport').textContent = t('export');
+  qs('#btnImport').textContent = t('import');
+  qs('#btnClear').textContent = t('clearAll');
+  qs('#f-disclaimer').textContent = t('footer');
+}
+function doExport(){
+  const payload = FT.exportPayload(areas, windows, log, asof);
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'load-shedding-tracker-bd.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function importObject(payload){
+  const res = FT.validateImport(payload, asof);
+  if (res.error) { toast(t('importBad')); return { ok: false, error: res.error }; }
+  areas = res.areas; windows = res.windows; log = res.log;
+  selAreaId = areas.length ? areas[0].id : null;
+  save(); applyLang(); renderAll();
+  toast(t('imported', { n: String(areas.length), m: String(windows.length), k: String(log.length) }));
+  return { ok: true };
+}
+function init(){
+  applyLang(); renderAll();
+  qs('#langBtn').onclick = function(){
+    lang = lang === 'en' ? 'bn' : 'en';
+    try { localStorage.setItem(FT.LANG_KEY, lang); } catch(e){}
+    applyLang(); renderAll();
+  };
+  qs('#areaSelect').onchange = function(){ selAreaId = qs('#areaSelect').value || null; renderAll(); };
+  qs('#btnAddArea').onclick = function(){ qs('#areaForm').hidden = false; qs('#f-area-name').value = ''; qs('#areaErr').textContent = ''; qs('#f-area-name').focus(); };
+  qs('#btnCancelArea').onclick = function(){ qs('#areaForm').hidden = true; };
+  qs('#btnSaveArea').onclick = function(){
+    const name = qs('#f-area-name').value;
+    const errs = FT.validateArea({ name: name });
+    if (errs.length) { qs('#areaErr').textContent = t(errs[0]); return; }
+    const a = { id: FT.uid(), name: FT.trimStr(name) };
+    areas.push(a); selAreaId = a.id;
+    save(); renderAll(); qs('#areaForm').hidden = true; toast(t('saved'));
+  };
+  qs('#btnDelArea').onclick = function(){
+    if (!selAreaId) return;
+    if (!confirm(t('confirmDelArea'))) return;
+    areas = areas.filter(function(a){ return a.id !== selAreaId; });
+    windows = windows.filter(function(w){ return w.areaId !== selAreaId; });
+    log = log.filter(function(e){ return e.areaId !== selAreaId; });
+    selAreaId = areas.length ? areas[0].id : null;
+    save(); renderAll(); toast(t('deleted'));
+  };
+  qs('#btnSaveWindow').onclick = function(){
+    const cand = { areaId: selAreaId, weekday: schedDay, start: qs('#f-win-start').value, end: qs('#f-win-end').value };
+    const errs = FT.validateWindow(cand, windows);
+    if (errs.length) { qs('#winErr').textContent = t(errs[0]); return; }
+    qs('#winErr').textContent = '';
+    windows.push({ id: FT.uid(), areaId: selAreaId, weekday: schedDay, start: cand.start, end: cand.end });
+    save(); renderAll(); toast(t('saved'));
+  };
+  qs('#btnSaveLog').onclick = function(){
+    const raw = { areaId: selAreaId, date: qs('#f-log-date').value, start: qs('#f-log-start').value, end: qs('#f-log-end').value, note: qs('#f-log-note').value };
+    const errs = FT.validateLogEntry(raw, asof);
+    if (errs.length) { qs('#logErr').textContent = t(errs[0]); return; }
+    qs('#logErr').textContent = '';
+    log.push({ id: FT.uid(), areaId: selAreaId, date: raw.date, start: raw.start, end: raw.end, note: FT.trimStr(raw.note) });
+    save(); renderAll(); toast(t('saved'));
+  };
+  qs('#f-log-date').value = asof;
+  qs('#tabStatus').onclick = function(){ setTab('status'); };
+  qs('#tabSchedule').onclick = function(){ setTab('schedule'); };
+  qs('#tabLog').onclick = function(){ setTab('log'); };
+  qs('#tabTools').onclick = function(){ setTab('tools'); };
+  qs('#btnExport').onclick = doExport;
+  qs('#btnImport').onclick = function(){ qs('#fileImport').click(); };
+  qs('#fileImport').addEventListener('change', function(e){
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = function(){
+      let payload = null;
+      try { payload = JSON.parse(r.result); } catch(err){ payload = null; }
+      importObject(payload);
+    };
+    r.readAsText(f);
+  });
+  qs('#btnClear').onclick = function(){
+    if (!confirm(t('confirmClear'))) return;
+    areas = []; windows = []; log = []; selAreaId = null;
+    save(); renderAll(); toast(t('cleared'));
+  };
+  // live ticking: refresh status every 30s so countdown stays fresh
+  setInterval(function(){ renderStatus(); }, 30000);
+  window.__LST = FT;
+  window.__LST_state = function(){ return { areas: areas, windows: windows, log: log, lang: lang, asof: asof, selAreaId: selAreaId }; };
+  window.__LST_import = function(jsonStr){
+    let payload = null;
+    try { payload = JSON.parse(jsonStr); } catch(e){ payload = null; }
+    return importObject(payload);
+  };
+  window.__LST_READY = true;
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
+})();
+</script>
+</body>
+</html>
